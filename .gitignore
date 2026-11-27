@@ -1,0 +1,17 @@
+# Build output
+RELEASE/PLUGINS/*/*.dll
+RELEASE/PLUGINS/*/*.pdb
+RELEASE/PLUGINS/*/history.json
+RELEASE/*.exe
+RELEASE/*.pdb
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# NuGet packages (restored via `nuget restore NAOMI.sln` or `msbuild -t:Restore`)
+packages/
+
+# Test artifacts
+*.tmp
