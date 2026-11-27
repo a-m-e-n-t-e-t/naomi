@@ -81,6 +81,11 @@ namespace _3D
         private readonly PyramidState[] _pyrStates = new PyramidState[4];
         private double _time = 0.0;
 
+        // Один генератор на всю сцену: создаётся один раз, а не каждый кадр
+        // (создание Random в каждом Update() давало аллокации и корреляцию
+        // последовательностей из-за совпадающих сидов).
+        private readonly Random _rng = new Random();
+
         // -----------------------------------------------------------------
         // Текстура логотипа.
         // -----------------------------------------------------------------
@@ -107,12 +112,12 @@ namespace _3D
             for (int i = 0; i < 4; i++)
             {
                 _pyrStates[i].CurAmp = 0f;
-                _pyrStates[i].TgtAmp = 0.1f + (float)rng.NextDouble() * 0.6f;
-                _pyrStates[i].CurFreq = 0.3f + (float)rng.NextDouble() * 0.8f;
-                _pyrStates[i].TgtFreq = 0.3f + (float)rng.NextDouble() * 0.8f;
-                _pyrStates[i].CurPhase = (float)(rng.NextDouble() * Math.PI * 2);
-                _pyrStates[i].TgtPhase = (float)(rng.NextDouble() * Math.PI * 2);
-                _pyrStates[i].NextChange = 1.0 + rng.NextDouble() * 4.0;
+                _pyrStates[i].TgtAmp = 0.1f + (float)_rng.NextDouble() * 0.6f;
+                _pyrStates[i].CurFreq = 0.3f + (float)_rng.NextDouble() * 0.8f;
+                _pyrStates[i].TgtFreq = 0.3f + (float)_rng.NextDouble() * 0.8f;
+                _pyrStates[i].CurPhase = (float)(_rng.NextDouble() * Math.PI * 2);
+                _pyrStates[i].TgtPhase = (float)(_rng.NextDouble() * Math.PI * 2);
+                _pyrStates[i].NextChange = 1.0 + _rng.NextDouble() * 4.0;
             }
         }
 
@@ -159,7 +164,7 @@ namespace _3D
             BitmapData data = bmp.LockBits(
                 new Rectangle(0, 0, bmp.Width, bmp.Height),
                 ImageLockMode.ReadOnly,
-                PixelFormat.Format32bppArgb);
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
             GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba,
                 data.Width, data.Height, 0,
@@ -187,7 +192,6 @@ namespace _3D
         public void Update(double dt)
         {
             _time += dt;
-            var rng = new Random((int)(_time * 1000) ^ Environment.TickCount);
 
             // -- Вращение --
             _angle += _curSpeed * (float)dt;
@@ -202,11 +206,11 @@ namespace _3D
             if (_nextAxisChange <= 0)
             {
                 // Новая случайная ось (единичный вектор)
-                _tgtAxis = RandomUnitVector(rng);
+                _tgtAxis = RandomUnitVector(_rng);
                 // Новая случайная скорость: 0.2..1.5 рад/с
-                _tgtSpeed = 0.2f + (float)rng.NextDouble() * 1.3f;
+                _tgtSpeed = 0.2f + (float)_rng.NextDouble() * 1.3f;
                 // Следующая смена через 2-5 сек
-                _nextAxisChange = 2.0 + rng.NextDouble() * 3.0;
+                _nextAxisChange = 2.0 + _rng.NextDouble() * 3.0;
             }
 
             // -- Отдаление пирамид --
@@ -224,10 +228,10 @@ namespace _3D
                 st.NextChange -= dt;
                 if (st.NextChange <= 0)
                 {
-                    st.TgtAmp = 0.05f + (float)rng.NextDouble() * 0.7f;
-                    st.TgtFreq = 0.2f + (float)rng.NextDouble() * 1.2f;
-                    st.TgtPhase = (float)(rng.NextDouble() * Math.PI * 2);
-                    st.NextChange = 1.5 + rng.NextDouble() * 3.5;
+                    st.TgtAmp = 0.05f + (float)_rng.NextDouble() * 0.7f;
+                    st.TgtFreq = 0.2f + (float)_rng.NextDouble() * 1.2f;
+                    st.TgtPhase = (float)(_rng.NextDouble() * Math.PI * 2);
+                    st.NextChange = 1.5 + _rng.NextDouble() * 3.5;
                 }
                 _pyrStates[i] = st;
             }

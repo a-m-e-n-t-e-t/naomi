@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text;
 
@@ -38,7 +37,7 @@ namespace UNLIMMATH
         // Таблицы базовой арифметики.
         // -----------------------------------------------------------------
         private static readonly string[] Numbers =
-            { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+            { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" }; // сохранён для совместимости/отладки
 
         private static readonly string[,] Sums = {
             {"+","0","1","2","3","4","5","6","7","8","9"},
@@ -119,7 +118,22 @@ namespace UNLIMMATH
         private static bool IsNeg(string s) { return s.StartsWith("-"); }
         private static string MakeNeg(string s) { return IsNeg(s) ? s.Substring(1) : "-" + s; }
         private static string AbsVal(string s) { return IsNeg(s) ? s.Substring(1) : s; }
-        private static bool IsZero(string s) { return Clean(s) == "0"; }
+        private static bool IsZero(string s)
+        {
+            // Быстрая проверка без аллокации Clean(): число из одних нулей
+            // (возможно, с точкой и минусом) — это ноль. Для корректных
+            // чисел-строк эквивалентно Clean(s) == "0".
+            if (string.IsNullOrEmpty(s)) return true;
+            int i = s[0] == '-' ? 1 : 0;
+            if (i == s.Length) return true;
+            for (; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c == '0' || c == '.') continue;
+                return false;
+            }
+            return true;
+        }
 
         // -----------------------------------------------------------------
         // Clean — удаление незначащих нулей.
@@ -175,10 +189,14 @@ namespace UNLIMMATH
         {
             if (a.Length == 1) a = new string[] { a[0], "" };
             if (b.Length == 1) b = new string[] { b[0], "" };
-            while (a[0].Length > b[0].Length) b[0] = "0" + b[0];
-            while (a[0].Length < b[0].Length) a[0] = "0" + a[0];
-            while (a[1].Length > b[1].Length) b[1] = b[1] + "0";
-            while (a[1].Length < b[1].Length) a[1] = a[1] + "0";
+            // Выравнивание разрядов одной операцией вместо циклической
+            // конкатенации (каждая итерация «0» + b[0] пересоздавала строку).
+            int d = a[0].Length - b[0].Length;
+            if (d > 0) b[0] = new string('0', d) + b[0];
+            else if (d < 0) a[0] = new string('0', -d) + a[0];
+            d = a[1].Length - b[1].Length;
+            if (d > 0) b[1] = b[1] + new string('0', d);
+            else if (d < 0) a[1] = a[1] + new string('0', -d);
             return new Result { res_a = a, res_b = b };
         }
 
@@ -199,10 +217,12 @@ namespace UNLIMMATH
             string[] ca = a.Split('.'), cb = b.Split('.');
             if (ca[0].Length > cb[0].Length) return ">";
             if (ca[0].Length < cb[0].Length) return "<";
+            // Цифры сравниваются напрямую (c - '0'): Array.IndexOf
+            // по массиву строк-номеров на каждый символ был в разы медленнее.
             for (int i = 0; i < ca[0].Length; i++)
             {
-                int ia = Array.IndexOf(Numbers, ca[0][i].ToString());
-                int ib = Array.IndexOf(Numbers, cb[0][i].ToString());
+                int ia = ca[0][i] - '0';
+                int ib = cb[0][i] - '0';
                 if (ia > ib) return ">";
                 if (ia < ib) return "<";
             }
@@ -213,8 +233,8 @@ namespace UNLIMMATH
             while (fb.Length < ml) fb += "0";
             for (int i = 0; i < ml; i++)
             {
-                int ia = Array.IndexOf(Numbers, fa[i].ToString());
-                int ib = Array.IndexOf(Numbers, fb[i].ToString());
+                int ia = fa[i] - '0';
+                int ib = fb[i] - '0';
                 if (ia > ib) return ">";
                 if (ia < ib) return "<";
             }
@@ -251,7 +271,11 @@ namespace UNLIMMATH
             ca = t.res_a; cb = t.res_b;
             int point = ca[1].Length > 0 ? ca[1].Length : -1;
             string aC = ca[0] + ca[1], bC = cb[0] + cb[1];
-            string result = "", perenos = "";
+            // Разряды копятся в обратном порядке в StringBuilder, затем
+            // разворачиваются один раз — раньше конкатенация слева
+            // пересоздавала строку на каждом разряде (квадратичная сложность).
+            var result = new System.Text.StringBuilder(aC.Length + 1);
+            string perenos = "";
             for (int i = aC.Length - 1; i >= 0; i--)
             {
                 string tr = Tbl(Sums, aC[i], bC[i], 11, 11);
@@ -263,11 +287,14 @@ namespace UNLIMMATH
                         tr = tr[0].ToString() + Tbl(Sums, tr[1], '1', 11, 11);
                 }
                 perenos = tr.Length > 1 ? tr.Substring(0, tr.Length - 1) : "";
-                result = tr[tr.Length - 1] + result;
+                result.Append(tr[tr.Length - 1]);
             }
-            if (perenos != "") result = perenos + result;
-            if (point > -1) result = result.Insert(result.Length - point, ".");
-            return Clean(result);
+            if (perenos != "") result.Append(perenos);
+            char[] arr = new char[result.Length];
+            for (int i = 0; i < arr.Length; i++) arr[i] = result[arr.Length - 1 - i];
+            string r2 = new string(arr);
+            if (point > -1) r2 = r2.Insert(r2.Length - point, ".");
+            return Clean(r2);
         }
 
         // -----------------------------------------------------------------
@@ -288,31 +315,45 @@ namespace UNLIMMATH
             ca = t.res_a; cb = t.res_b;
             int point = ca[1].Length > 0 ? ca[1].Length : -1;
             string aC = ca[0] + ca[1], bC = cb[0] + cb[1];
-            string result = "", perenos = "";
+            // Разряды копятся в обратном порядке, затем переворачиваются
+            // один раз (см. Sum): конкатенация слева была квадратичной.
+            var result = new System.Text.StringBuilder(aC.Length + 1);
+            string perenos = "";
             for (int i = aC.Length - 1; i >= 0; i--)
             {
                 char ai = aC[i], bi = bC[i];
                 if (perenos != "")
                 {
-                    string aiMinus1 = Tbl(Subs, ai.ToString(), "1", 12, 11);
+                    // char-перегрузка Tbl вместо строковой: без аллокаций
+                    // «ai.ToString()» на каждый разряд.
+                    string aiMinus1 = Tbl(Subs, ai, '1', 12, 11);
                     if (aiMinus1 == "") { ai = '9'; perenos = "1"; }
                     else { ai = aiMinus1[0]; perenos = ""; }
                 }
                 string s = "";
-                if (Sr(ai.ToString(), bi.ToString()) == "<")
+                // цифры — это '0'..'9', сравнение символов = сравнение чисел
+                if (ai < bi)
                 {
                     s = ai.ToString();
                     ai = '1';
                     perenos = "1";
                 }
-                string aKey = (ai == '1' && s != "") ? "10" : ai.ToString();
-                string tr = Tbl(Subs, aKey, bi.ToString(), 12, 11);
+                string tr;
+                if (s != "")
+                    tr = Tbl(Subs, "10", bi.ToString(), 12, 11);   // (10+ai) − bi: строка «10» таблицы Subs
+                else
+                    tr = Tbl(Subs, ai, bi, 12, 11);
                 if (s != "")
                     tr = Tbl(Sums, tr[0], s[0], 11, 11);
-                result = (tr.Length > 0 ? tr[tr.Length - 1].ToString() : "0") + result;
+                result.Append(tr.Length > 0 ? tr[tr.Length - 1] : '0');
             }
-            if (point > -1) result = result.Insert(result.Length - point, ".");
-            return Clean(result);
+            // perenos здесь остаться не может: вариант a < b отсекается
+            // сравнением Sr(a,b) в начале метода, где операнды меняются местами.
+            char[] arr = new char[result.Length];
+            for (int i = 0; i < arr.Length; i++) arr[i] = result[arr.Length - 1 - i];
+            string r2 = new string(arr);
+            if (point > -1) r2 = r2.Insert(r2.Length - point, ".");
+            return Clean(r2);
         }
 
         // -----------------------------------------------------------------
@@ -334,16 +375,18 @@ namespace UNLIMMATH
         private static string MultBy11(string num)
         {
             if (num.Contains(".")) return null;
-            string result = num[num.Length - 1].ToString();
+            // char-арифметика вместо int.Parse(char.ToString()) — без аллокаций.
+            var result = new System.Text.StringBuilder(num.Length + 1);
+            result.Append(num[num.Length - 1]);
             int carry = 0;
             for (int i = num.Length - 2; i >= 0; i--)
             {
-                int sum = int.Parse(num[i].ToString()) + int.Parse(num[i + 1].ToString()) + carry;
+                int sum = (num[i] - '0') + (num[i + 1] - '0') + carry;
                 carry = sum / 10;
-                result = (sum % 10).ToString() + result;
+                result.Insert(0, (char)('0' + sum % 10));
             }
-            int first = int.Parse(num[0].ToString()) + carry;
-            return first.ToString() + result;
+            int first = (num[0] - '0') + carry;
+            return first.ToString() + result.ToString();
         }
 
         // -----------------------------------------------------------------
@@ -451,7 +494,10 @@ namespace UNLIMMATH
             }
             result = Clean(result);
             string finalResult = sign == "-" && result != "0" ? sign + result : result;
-            _multCache[key] = finalResult;
+            // Кэш ограничен по размеру: без ограничения память росла бесконечно
+            // в долгих сессиях вычислений.
+            if (_multCache.Count < 8192)
+                _multCache[key] = finalResult;
             return finalResult;
         }
 
@@ -492,7 +538,10 @@ namespace UNLIMMATH
             int shift = decA - decB;
             if (shift < 0) { aI = aI + new string('0', -shift); shift = 0; }
             aI = aI + new string('0', PREC + 2);
-            string quotient = "", remainder = "0";
+            // Частное копится в StringBuilder — конкатенация строки в цикле
+            // делала квадратичную сложность на длинных числах.
+            var quotient = new System.Text.StringBuilder(aI.Length + 1);
+            string remainder = "0";
             if (bI.Length == 1)
             {
                 int bDigit = int.Parse(bI);
@@ -503,7 +552,7 @@ namespace UNLIMMATH
                     int remInt = int.Parse(remainder);
                     int q = remInt / bDigit;
                     int newRem = remInt - q * bDigit;
-                    quotient += q.ToString();
+                    quotient.Append((char)('0' + q));
                     remainder = newRem.ToString();
                 }
             }
@@ -527,11 +576,11 @@ namespace UNLIMMATH
                         }
                         if (Sr(remainder, bI) == "<")
                         {
-                            quotient += new string('0', zeros + 1);
+                            quotient.Append('0', zeros + 1);
                             i = j;
                             continue;
                         }
-                        quotient += new string('0', zeros);
+                        quotient.Append('0', zeros);
                         i = j;
                         string guess = EstimateDigit(remainder, bI);
                         int guessInt = int.Parse(guess);
@@ -553,10 +602,10 @@ namespace UNLIMMATH
                         }
                         if (bestD > 0)
                         {
-                            quotient += bestD.ToString();
+                            quotient.Append((char)('0' + bestD));
                             remainder = Sub(remainder, Mult(bI, bestD.ToString()));
                         }
-                        else quotient += "0";
+                        else quotient.Append('0');
                         continue;
                     }
                     string guessN = EstimateDigit(remainder, bI);
@@ -579,27 +628,28 @@ namespace UNLIMMATH
                     }
                     if (bestDN > 0)
                     {
-                        quotient += bestDN.ToString();
+                        quotient.Append((char)('0' + bestDN));
                         remainder = Sub(remainder, Mult(bI, bestDN.ToString()));
                     }
-                    else quotient += "0";
+                    else quotient.Append('0');
                     i++;
                 }
             }
             int totalFrac = (PREC + 2) + shift;
-            if (totalFrac > 0 && quotient.Length > totalFrac)
+            string quotientStr = quotient.ToString();
+            if (totalFrac > 0 && quotientStr.Length > totalFrac)
             {
-                string intPart = quotient.Substring(0, quotient.Length - totalFrac);
-                string fracPart = quotient.Substring(quotient.Length - totalFrac);
-                quotient = intPart + "." + fracPart;
+                string intPart = quotientStr.Substring(0, quotientStr.Length - totalFrac);
+                string fracPart = quotientStr.Substring(quotientStr.Length - totalFrac);
+                quotientStr = intPart + "." + fracPart;
             }
             else if (totalFrac > 0)
             {
-                quotient = "0." + new string('0', totalFrac - quotient.Length) + quotient;
+                quotientStr = "0." + new string('0', totalFrac - quotientStr.Length) + quotientStr;
             }
-            quotient = RoundTo(quotient, PREC);
-            quotient = Clean(quotient);
-            return sign == "-" && quotient != "0" ? sign + quotient : quotient;
+            quotientStr = RoundTo(quotientStr, PREC);
+            quotientStr = Clean(quotientStr);
+            return sign == "-" && quotientStr != "0" ? sign + quotientStr : quotientStr;
         }
 
         // -----------------------------------------------------------------
@@ -684,6 +734,24 @@ namespace UNLIMMATH
         }
 
         // -----------------------------------------------------------------
+        // HalveInt — деление целого неотрицательного числа-строки на 2
+        // разрядной арифметикой (точное целочисленное деление).
+        // -----------------------------------------------------------------
+        private static string HalveInt(string s)
+        {
+            var sb = new System.Text.StringBuilder(s.Length);
+            int carry = 0;
+            foreach (char c in s)
+            {
+                int v = carry * 10 + (c - '0');
+                sb.Append((char)('0' + v / 2));
+                carry = v % 2;
+            }
+            string r = sb.ToString().TrimStart('0');
+            return r == "" ? "0" : r;
+        }
+
+        // -----------------------------------------------------------------
         // PowInt — двоичное возведение в степень.
         // -----------------------------------------------------------------
         public static string PowInt(string x, string n)
@@ -701,9 +769,9 @@ namespace UNLIMMATH
                 if (lastDig == "1" || lastDig == "3" || lastDig == "5" || lastDig == "7" || lastDig == "9")
                     result = Mult(result, base_);
                 base_ = Mult(base_, base_);
-                exp = Div(exp, "2");
-                string[] ep2 = exp.Split('.');
-                exp = ep2[0];
+                // Галоение разрядной арифметикой вместо Div(exp, "2") —
+                // деление считало ещё 22 запасных знака на каждый шаг.
+                exp = HalveInt(ep[0]);
                 if (IsZero(exp)) break;
             }
             return Clean(result);
@@ -749,6 +817,15 @@ namespace UNLIMMATH
             if (x == "1") return "0";
             string k = "0";
             string two = "2";
+            // Приведение x к [0.5, 2]: для больших чисел делим сразу
+            // на 2^30 (шаг k += 30), иначе цикл деления на 2 крутился бы
+            // сотни раз на числах вроде 1e100.
+            const string twoPow30 = "1073741824";
+            while (Sr(x, twoPow30) == ">")
+            {
+                x = Div(x, twoPow30);
+                k = Sum(k, "30");
+            }
             while (Sr(x, two) == ">") { x = Div(x, two); k = Sum(k, "1"); }
             while (Sr(x, "0.5") == "<") { x = Mult(x, two); k = Sub(k, "1"); }
             string z = Div(Sub(x, "1"), Sum(x, "1"));
@@ -788,8 +865,21 @@ namespace UNLIMMATH
         {
             string twoPi = Mult(PI, "2");
             x = Clean(x);
+            bool neg = IsNeg(x);
+            if (neg) x = AbsVal(x);
+            if (Sr(x, twoPi) == ">" || Sr(x, twoPi) == "=")
+            {
+                // Вместо линейного вычитания 2π в цикле: делим x/2π, берём
+                // целую часть k и вычитаем k*2π одним вычитанием — для углов
+                // вроде 1e6 это миллионы итераций сэкономлены.
+                string k = Div(x, twoPi);
+                string kk = k.Split('.')[0].TrimStart('0');
+                if (kk == "") kk = "0";
+                x = Sub(x, Mult(twoPi, kk));
+            }
             while (Sr(x, twoPi) == ">" || Sr(x, twoPi) == "=")
                 x = Sub(x, twoPi);
+            if (neg) x = MakeNeg(x);
             while (IsNeg(x))
                 x = Sum(x, twoPi);
             return x;
@@ -991,20 +1081,16 @@ namespace UNLIMMATH
             if (IsNeg(x)) throw new CalcException("sqrt от отрицательного");
             if (IsZero(x)) return "0";
             if (x == "1") return "1";
-            // Улучшенное начальное приближение через log10:
-            // sqrt(x) ≈ 10^(floor(log10(x)/2))
+            // Начальное приближение по количеству разрядов: 10^(di/2).
+            // Прежнее приближение через double теряло точность и переполнялось
+            // на числах больше 1e308 — тогда Ньютону не хватало 200 итераций,
+            // и sqrt больших чисел молча возвращал неверный результат.
             string y = x;
-            try
-            {
-                double xFloat = double.Parse(x, CultureInfo.InvariantCulture);
-                if (xFloat > 0)
-                {
-                    double guess = Math.Pow(10, Math.Floor(Math.Log10(xFloat) / 2));
-                    if (guess > 0)
-                        y = guess.ToString("0", CultureInfo.InvariantCulture);
-                }
-            }
-            catch { }
+            string absX = AbsVal(x);
+            string ip = absX.Contains(".") ? absX.Split('.')[0] : absX;
+            string ipTrim = ip.TrimStart('0');
+            if (ipTrim.Length > 1)
+                y = "1" + new string('0', (ipTrim.Length + 1) / 2 - 1);
             string prev = "0";
             for (int iter = 0; iter < 200; iter++)
             {
@@ -1272,10 +1358,11 @@ namespace UNLIMMATH
             var list = new List<string>();
             foreach (string a in args) if (!string.IsNullOrEmpty(a)) list.Add(a);
             if (list.Count == 0) return "0";
+            // Сортировка через Sr (точное сравнение чисел-строк): раньше
+            // сравнение через double теряло точность на больших числах.
             list.Sort((x, y) => {
-                double dx = double.Parse(Clean(x), CultureInfo.InvariantCulture);
-                double dy = double.Parse(Clean(y), CultureInfo.InvariantCulture);
-                return dx.CompareTo(dy);
+                string r = Sr(x, y);
+                return r == ">" ? 1 : (r == "<" ? -1 : 0);
             });
             int n = list.Count;
             if (n % 2 == 1) return list[n / 2];
@@ -1373,7 +1460,11 @@ namespace UNLIMMATH
 
         private static void SkipWs()
         {
-            while (_pos < _expr.Length && (_expr[_pos] == ' ' || _expr[_pos] == '\t'))
+            // Пробелы, табуляция и переводы строк — ввод из RichTextBox
+            // часто содержит завершающий \r\n.
+            while (_pos < _expr.Length &&
+                   (_expr[_pos] == ' ' || _expr[_pos] == '\t' ||
+                    _expr[_pos] == '\r' || _expr[_pos] == '\n'))
                 _pos++;
         }
 
@@ -1442,18 +1533,27 @@ namespace UNLIMMATH
                 _pos++; SkipWs();
                 string r = ParseExpr();
                 SkipWs();
-                if (Peek() == ")") _pos++;
+                if (Peek() != ")")
+                    throw new CalcException("ожидалась закрывающая скобка ')' в позиции " + _pos);
+                _pos++;
                 return r;
             }
-            if ("0123456789.".Contains(Peek()))
+            if (_pos < _expr.Length && (char.IsDigit(_expr[_pos]) || _expr[_pos] == '.'))
             {
-                string num = "";
-                while (_pos < _expr.Length && "0123456789.".Contains(_expr[_pos].ToString()))
+                // Число: цифры и не более одной точки. Раньше проверка
+                // "0123456789.".Contains(Peek()) возвращала true и для пустой
+                // строки (string.Contains("") == true!), поэтому «2 +» молча
+                // превращалось в «2 + 0» вместо ошибки синтаксиса.
+                int dots = 0;
+                var num = new System.Text.StringBuilder();
+                while (_pos < _expr.Length && (char.IsDigit(_expr[_pos]) || _expr[_pos] == '.'))
                 {
-                    num += _expr[_pos];
+                    if (_expr[_pos] == '.' && ++dots > 1)
+                        throw new CalcException("лишняя точка в числе '" + num + ".'");
+                    num.Append(_expr[_pos]);
                     _pos++;
                 }
-                return num;
+                return num.ToString();
             }
             if (_pos < _expr.Length && char.IsLetter(_expr[_pos]))
             {
@@ -1501,7 +1601,9 @@ namespace UNLIMMATH
                             args.Add(ParseExpr());
                             SkipWs();
                         }
-                        if (Peek() == ")") _pos++;
+                        if (Peek() != ")")
+                            throw new CalcException("ожидалась ')' после аргументов " + name);
+                        _pos++;
                         return CallFunc(nameLower, args);
                     }
 
@@ -1518,7 +1620,9 @@ namespace UNLIMMATH
                             SkipWs();
                         }
                     }
-                    if (Peek() == ")") _pos++;
+                    if (Peek() != ")")
+                        throw new CalcException("ожидалась ')' после аргументов " + name);
+                    _pos++;
                     return CallFunc(nameLower, normalArgs);
                 }
                 throw new CalcException("неизвестное имя '" + name + "'");
@@ -1595,6 +1699,12 @@ namespace UNLIMMATH
             string oldX = null;
             bool hadX = _variables.TryGetValue("x", out oldX);
             _variables["x"] = Clean(xValue);
+            // Сохраняем состояние ВНЕШНЕГО разбора: _expr/_pos статические, и
+            // вложенный ParseExpr затирал позицию внешнего выражения — из-за
+            // этого «integrate(x^2, 0, 1) + 5» теряло «+ 5» (а также всё,
+            // что шло после solve(...)).
+            string oldExpr = _expr;
+            int oldPos = _pos;
             try
             {
                 _expr = exprStr;
@@ -1603,6 +1713,8 @@ namespace UNLIMMATH
             }
             finally
             {
+                _expr = oldExpr;
+                _pos = oldPos;
                 if (hadX) _variables["x"] = oldX;
                 else _variables.Remove("x");
             }
@@ -1637,7 +1749,13 @@ namespace UNLIMMATH
             _pos = 0;
             try
             {
-                return Clean(ParseExpr());
+                string result = Clean(ParseExpr());
+                // Хвост после выражения раньше молча игнорировался
+                // («x+y=5» вычисляло x+y, а «=5» терялось). Теперь это ошибка.
+                SkipWs();
+                if (_pos < _expr.Length)
+                    throw new CalcException("не распознан остаток: '" + _expr.Substring(_pos) + "'");
+                return result;
             }
             catch (CalcException ex)
             {

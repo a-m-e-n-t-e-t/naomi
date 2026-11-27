@@ -102,7 +102,7 @@ namespace _3D
                 for (int i = 0; i < 3; i++)
                 {
                     float angleDeg = i * 120f - 90f;
-                    float rad = angleDeg * System.Math.PI / 180f;
+                    float rad = (float)(angleDeg * System.Math.PI / 180.0);
                     float dotOuterR = size * 0.41f;
                     float dx = cx + (float)(dotOuterR * System.Math.Cos(rad));
                     float dy = cy + (float)(dotOuterR * System.Math.Sin(rad));
@@ -150,7 +150,7 @@ namespace _3D
                 new PointF(inLX, inLY),
             });
 
-            using (var brush = new LinearGradient(
+            using (var brush = new LinearGradientBrush(
                 new PointF(cx + dirX * innerR, cy + dirY * innerR),
                 new PointF(cx + dirX * outerR, cy + dirY * outerR),
                 Color.FromArgb(0, 140, 220),

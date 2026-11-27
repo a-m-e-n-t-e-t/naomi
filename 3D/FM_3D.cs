@@ -13,7 +13,10 @@ namespace _3D
     {
         private readonly TetrahedronScene _scene = new TetrahedronScene();
         private readonly Timer _timer = new Timer();
-        private DateTime _lastFrame = DateTime.Now;
+        // Stopwatch вместо DateTime.Now: монотонные измерения без аллокаций
+        // и без скачков при переводе системных часов.
+        private readonly System.Diagnostics.Stopwatch _clock =
+            System.Diagnostics.Stopwatch.StartNew();
         private bool _glReady = false;
 
         public FM_3D()
@@ -41,10 +44,9 @@ namespace _3D
         private void Timer_Tick(object sender, EventArgs e)
         {
             if (!_glReady) return;
-            DateTime now = DateTime.Now;
-            double dt = (now - _lastFrame).TotalSeconds;
+            double dt = _clock.Elapsed.TotalSeconds;
             if (dt > 0.1) dt = 0.1; // защита от больших скачков
-            _lastFrame = now;
+            _clock.Restart();
 
             _scene.Update(dt);
             glControl.Invalidate();

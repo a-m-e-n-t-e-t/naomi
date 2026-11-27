@@ -105,6 +105,10 @@ namespace TRANSLIT
         {
             if (_translitDat == null || _charIndex == null)
                 return text;
+            // Защита от выхода за границы таблицы при некорректном индексе
+            // стандарта (повреждённый CSV / чужой параметр команды).
+            if (colIndex < 0 || colIndex >= _translitDat.GetLength(1))
+                return text;
 
             // Используем StringBuilder для производительности — на больших
             // текстах конкатенация строк даёт квадратичную сложность.
@@ -133,6 +137,11 @@ namespace TRANSLIT
         /// </summary>
         public void P_Ini()
         {
+            // Защита от повторной инициализации: без этого повторный вызов
+            // P_Ini дублировал бы пункты меню стандартов в P_Integr.
+            if (_translitDat != null && _charIndex != null)
+                return;
+
             string csvPath = Path.Combine(
                 Application.ExecutablePath, "..", "PLUGINS", "TRANSLIT", "translit.csv");
             csvPath = Path.GetFullPath(csvPath);
