@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>8.0</LangVersion>
+    <AssemblyName>CalcTests</AssemblyName>
+    <RootNamespace>CalcTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="TestProgram.cs" />
+    <Compile Include="TestProgram.cs" Link="TestProgram.cs" />
+    <Compile Include="../UNLIMMATH/CalcEngine.cs" Link="CalcEngine.cs" />
+  </ItemGroup>
+</Project>
